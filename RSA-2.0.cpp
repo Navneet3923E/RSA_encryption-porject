@@ -28,6 +28,7 @@ void print_int128(int128 num) {
 // Fast modular exponentiation
 int128 mod_exp(int128 base, int128 exp, int128 mod) {
     int128 result = 1;
+    base = base%mod;
     while (exp > 0) {
         if (exp % 2 == 1) result = (result * base) % mod;
         base = (base * base) % mod;
@@ -50,10 +51,11 @@ bool is_prime(int128 num, int iterations = 5) {
     
     random_device rd;
     mt19937_64 gen(rd());
-    uniform_int_distribution<int128> dist(2, num - 2);
+    uniform_int_distribution<uint64_t> dist(2, (uint64_t)num-2);
     
-    for (int i = 0; i < iterations; i++) {
-        int128 a = dist(gen);
+    for(int i  = 0; i < iterations ; i++){
+        int128 a = 2 + (int128)dist(gen);
+
         int128 x = mod_exp(a, d, num);
         if (x == 1 || x == num - 1) continue;
         
@@ -70,7 +72,7 @@ bool is_prime(int128 num, int iterations = 5) {
     return true;
 }
 
-// Generate a random large prime number (128-bit support)
+//  128-bit prime number by multiplying two 64-bit primes
 int128 generate_large_prime(bool is_128_bit) {
     random_device rd;
     mt19937_64 gen(rd());
@@ -79,7 +81,7 @@ int128 generate_large_prime(bool is_128_bit) {
     int128 prime;
     do {
         if (is_128_bit) {
-            prime = (int128)dist(gen) * dist(gen) | 1;
+            prime = dist(gen) | 1;
         } else {
             prime = dist(gen) | 1;
         }
@@ -105,20 +107,32 @@ int128 mod_inverse(int128 e, int128 phi) {
 
 // Generate public-private keys
 pair<pair<int128, int128>, pair<int128, int128>> generate_keys(bool is_128_bit) {
+    cout << "Generating prime p..." << endl;
     int128 p = generate_large_prime(is_128_bit);
+    cout << "p generated." << endl;
+
+    cout << "Generating prime ..." << endl;
     int128 q = generate_large_prime(is_128_bit);
+    cout << "q generated." << endl;
+    
     int128 n = p * q;
     int128 phi = (p - 1) * (q - 1);
     int128 e = 65537;
     int128 d = mod_inverse(e, phi);
+    if (d == -1) {
+        cerr << " Could not find modular inverse!" << endl;
+        exit(1);
+    }
     return {{e, n}, {d, n}};
 }
 
 // Encrypt text
 vector<int128> encrypt_text(string message, int128 e, int128 n) {
     vector<int128> encrypted;
-    for (char ch : message)
-        encrypted.push_back(mod_exp(ch, e, n));
+    for (char ch : message) {
+        int128 encrypted_value = mod_exp(static_cast<unsigned char>(ch), e, n);
+        encrypted.push_back(encrypted_value);
+    }    
     return encrypted;
 }
 
@@ -166,29 +180,34 @@ int main() {
     if(x == 1) use_128_bit = true;
     else use_128_bit = false;
 
-    auto keys = generate_keys(use_128_bit);
-    auto [public_key, private_key] = keys;
-    auto [e, n] = public_key;
-    auto [d, _] = private_key;
+    pair<pair<int128, int128>, pair<int128, int128>> keys = generate_keys(use_128_bit);
+    pair<int128, int128> public_key = keys.first;
+    pair<int128, int128> private_key = keys.second;
 
-    // Text Encryption Example
+    int128 e = public_key.first;
+    int128 n = public_key.second;
+    int128 d = private_key.first;
+
+
+
+    // Text Encryption 
     string message;
     cout << "Enter a message to encrypt: ";
     cin.ignore();
     getline(cin, message);
+
     vector<int128> encrypted = encrypt_text(message, e, n);
     string decrypted = decrypt_text(encrypted, d, n);
 
     cout << "Original Message: " << message << endl;
-    cout<< "Encrypted Message: " << "[";
-    for(int128 i = 0 ; i < encrypted.size() ; i++){
-        if(i+1 == encrypted.size()) print_int128(encrypted[i]);
-        else print_int128(encrypted[i]) ; cout<<",";
+    cout << "Encrypted Message: [";
+    for (size_t i = 0; i < encrypted.size(); i++) {
+        print_int128(encrypted[i]);
+        if (i + 1 != encrypted.size()) cout << ", ";
     }
-    cout<<"]"<<endl;
+    cout << "]" << endl;    
     cout << "Decrypted Message: " << decrypted << endl;
 
-    // Image Encryption Example
     encrypt_image("13.jpg", "encrypted.enc", e, n);
     decrypt_image("encrypted.enc", "decrypted.bmp", d, n);
 
